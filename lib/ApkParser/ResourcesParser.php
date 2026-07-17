@@ -36,6 +36,12 @@ class ResourcesParser
     private $resources = array();
 
     /**
+     * Config qualifier of every stored resource value, mirrors $resources.
+     * @var array
+     */
+    private $resourceConfigs = array();
+
+    /**
      * @param SeekableStream $stream
      * @throws \Exception
      */
@@ -52,6 +58,30 @@ class ResourcesParser
     public function getResources($key)
     {
         return isset($this->resources[strtolower($key)]) ? $this->resources[strtolower($key)] : null;
+    }
+
+    /**
+     * Same as getResources() but each value comes with the config qualifier
+     * (e.g. "hdpi", "en-rUS-v21", "" for the default config) it was defined for.
+     *
+     * @param $key
+     * @return array|null list of array('value' => mixed, 'config' => string)
+     */
+    public function getResourcesWithConfig($key)
+    {
+        $key = strtolower($key);
+        if (!isset($this->resources[$key])) {
+            return null;
+        }
+
+        $result = array();
+        foreach ($this->resources[$key] as $index => $value) {
+            $result[] = array(
+                'value' => $value,
+                'config' => isset($this->resourceConfigs[$key][$index]) ? $this->resourceConfigs[$key][$index] : '',
+            );
+        }
+        return $result;
     }
 
     /**
@@ -263,11 +293,9 @@ class ResourcesParser
 
         // Skip the header data
         $data->seek($headerSize - $config_size);
-        // Process config data TODO 未完成
+        // Process the config data this type chunk was defined for.
         $config = $this->processConfig($data->copyBytes($config_size));
-
-        // Skip the config data
-        // $data->seek($headerSize);
+        $configQualifier = $config['qualifier'];
 
         // Start to get entry indices
         $entryIndices = array();
@@ -302,14 +330,14 @@ class ResourcesParser
 
                 if ($valueDataType == self::TYPE_STRING) {
                     $value = $this->valueStringPool[$valueData];
-                    $this->putResource($resourceIdString, $value);
+                    $this->putResource($resourceIdString, $value, $configQualifier);
                     // echo ', data: ' . $value;
                 } else if ($valueDataType == self::TYPE_REFERENCE) {
                     $referenceIdString = '0x' . dechex($valueData);
                     $this->putReferenceResource($resourceIdString, $referenceIdString);
                     // echo ', reference: ' . $referenceIdString;
                 } else {
-                    $this->putResource($resourceIdString, $valueData);
+                    $this->putResource($resourceIdString, $valueData, $configQualifier);
                     // echo ', data: ' . $valueData;
                 }
                 // echo PHP_EOL;
@@ -399,20 +427,89 @@ class ResourcesParser
             $config['localeVariant'] = $bytes->read(8);
         }
 
+        if ($size >= 52) {
+            // 4
+            $config['screenLayout2'] = $bytes->readByte();
+            $config['colorMode'] = $bytes->readByte();
+            $bytes->readInt16LE(); // screenConfigPad2
+        }
+
+        $config['qualifier'] = $this->buildConfigQualifier($config);
+
         return $config;
+    }
+
+    /**
+     * Build a human-readable resource qualifier (like the res folder suffixes,
+     * e.g. "en-rUS-land-hdpi-v21") out of a parsed ResTable_config.
+     * An empty string means the default configuration.
+     *
+     * @param array $config
+     * @return string
+     */
+    private function buildConfigQualifier(array $config)
+    {
+        $parts = array();
+
+        if ($config['mcc'] != 0) {
+            $parts[] = 'mcc' . $config['mcc'];
+        }
+        if ($config['mnc'] != 0) {
+            $parts[] = 'mnc' . $config['mnc'];
+        }
+
+        $language = rtrim($config['language'], "\x00");
+        if ($language !== '' && ctype_alpha($language)) {
+            $locale = strtolower($language);
+            $country = rtrim($config['country'], "\x00");
+            if ($country !== '' && ctype_alpha($country)) {
+                $locale .= '-r' . strtoupper($country);
+            }
+            $parts[] = $locale;
+        }
+
+        $orientations = array(1 => 'port', 2 => 'land', 3 => 'square');
+        if (isset($orientations[$config['orientation']])) {
+            $parts[] = $orientations[$config['orientation']];
+        }
+
+        $densities = array(
+            120 => 'ldpi',
+            160 => 'mdpi',
+            213 => 'tvdpi',
+            240 => 'hdpi',
+            320 => 'xhdpi',
+            480 => 'xxhdpi',
+            640 => 'xxxhdpi',
+            0xFFFE => 'anydpi',
+            0xFFFF => 'nodpi',
+        );
+        $density = $config['density'] & 0xFFFF;
+        if ($density != 0) {
+            $parts[] = isset($densities[$density]) ? $densities[$density] : $density . 'dpi';
+        }
+
+        if (isset($config['sdVersion']) && $config['sdVersion'] > 0) {
+            $parts[] = 'v' . $config['sdVersion'];
+        }
+
+        return implode('-', $parts);
     }
 
     /**
      * @param $resourceId
      * @param $value
+     * @param string $configQualifier
      */
-    private function putResource($resourceId, $value)
+    private function putResource($resourceId, $value, $configQualifier = '')
     {
         $key = strtolower($resourceId);
         if (array_key_exists($key, $this->resources) === false) {
             $this->resources[$key] = array();
+            $this->resourceConfigs[$key] = array();
         }
         $this->resources[$key][] = $value;
+        $this->resourceConfigs[$key][] = $configQualifier;
     }
 
     /**
@@ -424,8 +521,9 @@ class ResourcesParser
         $key = strtolower($resourceId);
         if (array_key_exists($key, $this->resources)) {
             $values = $this->resources[$key];
-            foreach ($values as $value) {
-                $this->putResource($valueData, $value);
+            foreach ($values as $index => $value) {
+                $config = isset($this->resourceConfigs[$key][$index]) ? $this->resourceConfigs[$key][$index] : '';
+                $this->putResource($valueData, $value, $config);
             }
         }
     }

@@ -103,10 +103,13 @@ class Parser
             . " " . escapeshellarg($dex_file);
         $returns = shell_exec($command);
 
-        if (!$returns) //TODO : check if it not contains any error. $returns will always contain some output.
-            throw new \Exception("Couldn't decompile .dex file");
-
         $file_list = Utils::globRecursive($cache_folder . '*.ddx');
+
+        // dedexer always writes something to stdout, so instead of inspecting the
+        // output we verify that the decompiled class files were actually produced.
+        if (empty($file_list)) {
+            throw new \Exception("Couldn't decompile .dex file" . ($returns ? " : " . trim($returns) : ""));
+        }
 
         //Make classnames more readable.
         foreach ($file_list as &$file) {

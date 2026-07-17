@@ -38,6 +38,18 @@ class XmlParser
     private $ready = false;
     private $isUTF8 = false;
 
+    /**
+     * Namespaces declared in the binary xml, indexed by uri => prefix.
+     * @var array
+     */
+    private $namespaces = array();
+
+    /**
+     * Namespace uris already written out as xmlns declarations.
+     * @var array
+     */
+    private $declaredNamespaces = array();
+
     public static $indent_spaces = "                                             ";
 
     /**
@@ -67,8 +79,20 @@ class XmlParser
         }
 
         $parser = new self(new Stream(fopen($file, 'rb')));
-        //TODO : write a method in this class, ->saveToFile();
-        file_put_contents($destination === NULL ? $file : $destination, $parser->getXmlString());
+        $parser->saveToFile($destination === NULL ? $file : $destination);
+    }
+
+    /**
+     * Save the decompressed xml to the given file path.
+     *
+     * @param string $destination
+     * @throws \Exception
+     */
+    public function saveToFile($destination)
+    {
+        if (@file_put_contents($destination, $this->getXmlString()) === false) {
+            throw new \Exception("Could not save the xml into : {$destination}");
+        }
     }
 
     /**
@@ -106,6 +130,11 @@ class XmlParser
                     $resIdsOffset = $off + $chunkHeaderSize;
                     $resIdsCount = ($chunkSize - $chunkHeaderSize) / 4;
                     break;
+                case self::TAG_START_DOC: // RES_XML_START_NAMESPACE_TYPE
+                    $prefixSi = $this->littleEndianWord($this->bytes, $off + 4 * 4);
+                    $uriSi = $this->littleEndianWord($this->bytes, $off + 5 * 4);
+                    $this->registerNamespace($sitOff, $stOff, $prefixSi, $uriSi);
+                    break;
                 case self::RES_XML_START_ELEMENT_TYPE:
                     // xml starts here.
                     break 2;
@@ -136,7 +165,18 @@ class XmlParser
                         $tagName = $this->compXmlString($this->bytes, $sitOff, $stOff, $nameSi);
                         $startTagLineNo = $lineNo;
                         $attr_string = "";
+                        $ns_string = "";
                         $attrNameArray = array();
+
+                        if ($indentCount == 0) {
+                            // Declare every known namespace on the root element.
+                            foreach ($this->namespaces as $nsUri => $nsPrefix) {
+                                if (!isset($this->declaredNamespaces[$nsUri])) {
+                                    $ns_string .= " xmlns:" . $nsPrefix . "=\"" . htmlspecialchars($nsUri, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "\"";
+                                    $this->declaredNamespaces[$nsUri] = true;
+                                }
+                            }
+                        }
 
                         for ($ii = 0; $ii < $numbAttrs; $ii++) {
                             $attrNameNsSi = $this->littleEndianWord($this->bytes, $off);
@@ -163,18 +203,31 @@ class XmlParser
                                 $attrValue = "0x" . dechex($attrResId);
                             }
 
-                            //TODO insert proper namespace for attr name else xml will throw error,
-                            // for now we drop duplicate attr name that is broken in apk file
-                            array_push($attrNameArray, $attrName);
-
-                            if (count(array_unique($attrNameArray)) < count($attrNameArray)) {
-                                // duplicate $attrName
-                            } else {
-                                $attr_string .= " " . $attrName . "=\"" . $attrValue . "\"";
+                            // Resolve the attribute namespace, so a duplicate local name can be
+                            // disambiguated with its proper prefix instead of being dropped.
+                            $attrQualifiedName = $attrName;
+                            $attrNsUri = $attrNameNsSi != -1 ? $this->compXmlString($this->bytes, $sitOff, $stOff, $attrNameNsSi) : null;
+                            if ($attrNsUri !== null && isset($this->namespaces[$attrNsUri])) {
+                                $attrQualifiedName = $this->namespaces[$attrNsUri] . ':' . $attrName;
                             }
+
+                            if (!in_array($attrName, $attrNameArray)) {
+                                // Keep the plain local name for the first occurrence.
+                                $attrNameArray[] = $attrName;
+                                $attr_string .= " " . $attrName . "=\"" . $attrValue . "\"";
+                            } elseif ($attrQualifiedName !== $attrName && !in_array($attrQualifiedName, $attrNameArray)) {
+                                if (!isset($this->declaredNamespaces[$attrNsUri])) {
+                                    // The root element didn't declare this namespace, declare it here.
+                                    $ns_string .= " xmlns:" . $this->namespaces[$attrNsUri] . "=\"" . htmlspecialchars($attrNsUri, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "\"";
+                                    $this->declaredNamespaces[$attrNsUri] = true;
+                                }
+                                $attrNameArray[] = $attrQualifiedName;
+                                $attr_string .= " " . $attrQualifiedName . "=\"" . $attrValue . "\"";
+                            }
+                            // An exact duplicate that can't be disambiguated is dropped to keep the xml valid.
                         }
 
-                        $this->appendXmlIndent($indentCount, "<" . $tagName . $attr_string . ">");
+                        $this->appendXmlIndent($indentCount, "<" . $tagName . $ns_string . $attr_string . ">");
                         $indentCount++;
                     }
                     break;
@@ -188,17 +241,24 @@ class XmlParser
                     }
                     break;
 
-                case self::TAG_START_DOC:
+                case self::TAG_START_DOC: // start of a namespace scope
                     {
-                        $off += 4;
-                        //todo
+                        // For a namespace chunk, the two words after the header
+                        // hold the prefix and uri string indexes.
+                        $this->registerNamespace($sitOff, $stOff, $nameNsSi, $nameSi);
+                        $off += 6 * 4;
                     }
                     break;
 
-                case self::TAG_DOC_END:
+                case self::TAG_DOC_END: // end of a namespace scope
                     {
-                        $this->ready = true;
-                        break 2;
+                        // The document is done once the root element has closed,
+                        // otherwise only a nested namespace scope ended.
+                        if ($indentCount <= 0) {
+                            $this->ready = true;
+                            break 2;
+                        }
+                        $off += 6 * 4;
                     }
                     break;
 
@@ -233,6 +293,26 @@ class XmlParser
                     throw new \Exception("Unrecognized tag code '" . dechex($currentTag) . "' at offset " . $off);
                     break;
             }
+        }
+
+        $this->ready = true;
+    }
+
+    /**
+     * Register a namespace prefix declared in the binary xml.
+     *
+     * @param int $sitOff
+     * @param int $stOff
+     * @param int $prefixSi string index of the namespace prefix
+     * @param int $uriSi string index of the namespace uri
+     */
+    private function registerNamespace($sitOff, $stOff, $prefixSi, $uriSi)
+    {
+        $prefix = $this->compXmlString($this->bytes, $sitOff, $stOff, $prefixSi);
+        $uri = $this->compXmlString($this->bytes, $sitOff, $stOff, $uriSi);
+
+        if (!empty($prefix) && !empty($uri)) {
+            $this->namespaces[$uri] = $prefix;
         }
     }
 

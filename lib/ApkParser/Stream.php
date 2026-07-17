@@ -25,8 +25,7 @@ class Stream
      */
     public function __construct($stream)
     {
-        if (!is_resource($stream)) {
-            // TODO : the resource type must be a regular file stream resource.
+        if (!is_resource($stream) || get_resource_type($stream) !== 'stream') {
             throw new \Exception("Invalid stream");
         }
 
