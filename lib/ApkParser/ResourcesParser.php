@@ -51,7 +51,7 @@ class ResourcesParser
      */
     public function getResources($key)
     {
-        return $this->resources[strtolower($key)];
+        return isset($this->resources[strtolower($key)]) ? $this->resources[strtolower($key)] : null;
     }
 
     /**
@@ -188,34 +188,32 @@ class ResourcesParser
 
         $strings = array();
         for ($i = 0; $i < $stringsCount; $i++) {
-            $lastPosition = $data->position();
-            $pos = $stringsStart + $offsets[$i];
-            $data->seek($pos);
-            $len = $data->position();
-            $data->seek($lastPosition);
-            if ($len < 0) {
-                $data->readInt16LE(); // extendShort
-            }
-            $pos += 2;
-
             $strings[$i] = '';
+            $data->seek($stringsStart + $offsets[$i]);
+
             if ($isUtf8) {
-                $length = 0;
-                $data->seek($pos);
-                while ($data->readByte() != 0) {
-                    $length++;
+                // Skip the UTF-16 char count (1 byte, or 2 when the high bit is set),
+                // then read the UTF-8 encoded byte length (same variable-size scheme).
+                $val = $data->readByte();
+                if (($val & 0x80) != 0) {
+                    $data->readByte();
+                }
+                $length = $data->readByte();
+                if (($length & 0x80) != 0) {
+                    $length = (($length & 0x7F) << 8) | $data->readByte();
                 }
                 if ($length > 0) {
-                    $data->seek($pos);
                     $strings[$i] = $data->read($length);
-                } else {
-                    $strings[$i] = '';
                 }
             } else {
-                $data->seek($pos);
-                while (($c = $data->read()) != 0) {
-                    $strings[$i] .= $c;
-                    $pos += 2;
+                // The length is a uint16 char count, extended to two uint16s
+                // when the high bit is set.
+                $length = $data->readInt16LE() & 0xFFFF;
+                if (($length & 0x8000) != 0) {
+                    $length = (($length & 0x7FFF) << 16) | ($data->readInt16LE() & 0xFFFF);
+                }
+                if ($length > 0) {
+                    $strings[$i] = mb_convert_encoding($data->read($length * 2), 'UTF-8', 'UTF-16LE');
                 }
             }
             // echo 'Parsed value: ', $strings[$i], PHP_EOL;
@@ -366,7 +364,7 @@ class ResourcesParser
         $bytes->backSeek(-4);
         $config['input'] = $bytes->readInt32LE();
 
-        if($size > 36) {
+        if ($size >= 36) {
             // 8
             $config['screenWidth'] = $bytes->readInt16LE();
             $config['screenHeight'] = $bytes->readInt16LE();
@@ -386,14 +384,16 @@ class ResourcesParser
             $bytes->backSeek(-4);
             $config['screenConfig'] = $bytes->readInt32LE();
 
-            // 10
-            $config['screenWidthDp'] = $bytes->readByte();
-            $config['screenHeightDp'] = $bytes->readByte();
+            // 8
+            $config['screenWidthDp'] = $bytes->readInt16LE();
+            $config['screenHeightDp'] = $bytes->readInt16LE();
             $bytes->backSeek(-4);
             $config['screenSizeDp'] = $bytes->readInt32LE();
+        }
 
+        if ($size >= 48) {
             // 4
-            $config['localeScript'] = $bytes->readInt32LE();
+            $config['localeScript'] = $bytes->read(4);
 
             // 8
             $config['localeVariant'] = $bytes->read(8);

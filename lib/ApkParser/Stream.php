@@ -86,13 +86,13 @@ class Stream
      */
     public function getByteArray($count = null)
     {
-        $bytes = array();
+        $data = stream_get_contents($this->stream, $count === null ? -1 : $count);
 
-        while (!$this->feof() && ($count === null || count($bytes) < $count)) {
-            $bytes[] = $this->readByte();
+        if ($data === false || $data === '') {
+            return array();
         }
 
-        return $bytes;
+        return array_values(unpack('C*', $data));
     }
 
     /**
@@ -122,13 +122,15 @@ class Stream
      */
     public function save($destination)
     {
-        $destination = new Stream(is_resource($destination) ? $destination : fopen($destination, 'w+'));
+        $weOpenedIt = !is_resource($destination);
+        $target = new Stream($weOpenedIt ? fopen($destination, 'w+') : $destination);
+
         while (!$this->feof()) {
-            $destination->write($this->read());
+            $target->write($this->read(8192));
         }
 
-        if (!is_resource($destination)) { // close the file if we opened it otwhise dont touch.
-            $destination->close();
+        if ($weOpenedIt) { // close the file if we opened it, otherwise don't touch.
+            $target->close();
         }
     }
 }

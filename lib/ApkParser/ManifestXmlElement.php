@@ -21,7 +21,11 @@ class ManifestXmlElement extends \SimpleXMLElement
          * @var \ApkParser\ManifestXmlElement
          */
         $permsArray = $this->{'uses-permission'};
-        $permissions = json_decode(file_get_contents(__DIR__ . "/lang/{$lang}.permissions.json"), true);
+        $langFile = __DIR__ . "/lang/" . basename($lang) . ".permissions.json";
+        if (!is_file($langFile)) {
+            $langFile = __DIR__ . "/lang/en.permissions.json"; // fall back to english for unknown languages
+        }
+        $permissions = json_decode(file_get_contents($langFile), true) ?: array();
         $perms = array();
         foreach ($permsArray as $perm) {
             $permAttr = get_object_vars($perm);

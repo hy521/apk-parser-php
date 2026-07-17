@@ -66,7 +66,7 @@ class XmlParser
             throw new \Exception("{$file} is not a regular file");
         }
 
-        $parser = new self(new Stream(fopen($file, 'rd')));
+        $parser = new self(new Stream(fopen($file, 'rb')));
         //TODO : write a method in this class, ->saveToFile();
         file_put_contents($destination === NULL ? $file : $destination, $parser->getXmlString());
     }
@@ -82,6 +82,8 @@ class XmlParser
         $off = $headerSize;
         $resIdsOffset = -1;
         $resIdsCount = 0;
+        $sitOff = 0;
+        $stOff = 0;
 
 
         while ($off < ($dataSize - 8)) {
@@ -107,7 +109,6 @@ class XmlParser
                 case self::RES_XML_START_ELEMENT_TYPE:
                     // xml starts here.
                     break 2;
-                    break;
 
                 case self::RES_NULL_TYPE:
                     // read null header.
@@ -146,9 +147,13 @@ class XmlParser
                             $off += 5 * 4;
 
                             $attrName = $this->compXmlString($this->bytes, $sitOff, $stOff, $attrNameSi);
-                            $attrNameResID = $this->littleEndianWord($this->bytes, $resIdsOffset + ($attrNameSi * 4));
-                            if (empty($attrName)) {
+                            if (empty($attrName) && $resIdsOffset != -1 && $attrNameSi >= 0 && $attrNameSi < $resIdsCount) {
+                                $attrNameResID = $this->littleEndianWord($this->bytes, $resIdsOffset + ($attrNameSi * 4));
                                 $attrName = $this->getResourceNameFromID($attrNameResID);
+                            }
+                            if (empty($attrName)) {
+                                // No usable attribute name, skip it or the xml would be invalid.
+                                continue;
                             }
 
                             if (($attrValueSi != -1)) {
@@ -359,8 +364,8 @@ class XmlParser
         if (!$this->ready)
             $this->decompress();
 
-        $xml = preg_replace('/&(?!#?[a-z0-9]+;)/', '&amp;', $this->xml); // get rid of the "&" and replace it with it's HTML code version
-        $xml = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x80-\x9F]/u', '', $xml);
+        $xml = preg_replace('/&(?!#?[a-z0-9]+;)/', '&amp;', $this->xml) ?? $this->xml; // get rid of the "&" and replace it with it's HTML code version
+        $xml = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x80-\x9F]/u', '', $xml) ?? $xml; // the /u pattern fails on invalid UTF-8, keep the unfiltered string then
         return $xml;
     }
 
@@ -374,11 +379,14 @@ class XmlParser
         if ($this->xmlObject === NULL || !$this->xmlObject instanceof $className) {
             $prev = libxml_use_internal_errors(true);
             $cleaned_xml = $this->stripInvalidXml($this->getXmlString());
-            $this->xmlObject = simplexml_load_string($cleaned_xml, $className);
-            if ($this->xmlObject === false) {
-                throw new XmlParserException($cleaned_xml);
+            $xmlObject = simplexml_load_string($cleaned_xml, $className);
+            if ($xmlObject === false) {
+                $exception = new XmlParserException($cleaned_xml); // must be built while internal errors are still on
+                libxml_use_internal_errors($prev);
+                throw $exception;
             }
             libxml_use_internal_errors($prev);
+            $this->xmlObject = $xmlObject;
         }
 
         return $this->xmlObject;

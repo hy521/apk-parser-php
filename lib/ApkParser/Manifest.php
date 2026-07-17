@@ -103,7 +103,9 @@ class Manifest extends Xml
     public function getMinSdkLevel()
     {
         $xmlObj = $this->getXmlObject();
+        if (!isset($xmlObj->{'uses-sdk'})) return null;
         $usesSdk = get_object_vars($xmlObj->{'uses-sdk'});
+        if (!isset($usesSdk['@attributes']['minSdkVersion'])) return null;
         return hexdec($usesSdk['@attributes']['minSdkVersion']);
     }
 
@@ -135,10 +137,13 @@ class Manifest extends Xml
     {
         if ($this->meta === null) {
             $xmlObj = $this->getXmlObject();
-            $nodes = $xmlObj->xpath('//meta-data');
+            $nodes = $xmlObj->xpath('//meta-data') ?: array();
             $this->meta = array();
             foreach ($nodes as $node) {
                 $nodeAttrs = get_object_vars($node->attributes());
+                if (!isset($nodeAttrs['@attributes']['name'])) {
+                    continue;
+                }
                 $nodeName = $nodeAttrs['@attributes']['name'];
                 if (array_key_exists('value', $nodeAttrs['@attributes'])) {
                     $this->meta[$nodeName] = $nodeAttrs['@attributes']['value'];
@@ -147,7 +152,7 @@ class Manifest extends Xml
                 }
             }
         }
-        return $this->meta[$name];
+        return isset($this->meta[$name]) ? $this->meta[$name] : null;
     }
 
     /**
@@ -157,7 +162,8 @@ class Manifest extends Xml
      */
     public function getMinSdk()
     {
-        return new AndroidPlatform($this->getMinSdkLevel());
+        if ($this->getMinSdkLevel() !== null) return new AndroidPlatform($this->getMinSdkLevel());
+        return null;
     }
 
     /**
@@ -179,7 +185,9 @@ class Manifest extends Xml
     public function getTargetSdkLevel()
     {
         $xmlObj = $this->getXmlObject();
+        if (!isset($xmlObj->{'uses-sdk'})) return null;
         $usesSdk = get_object_vars($xmlObj->{'uses-sdk'});
+        if (!isset($usesSdk['@attributes']['targetSdkVersion'])) return null;
         if (hexdec($usesSdk['@attributes']['targetSdkVersion'])) return hexdec($usesSdk['@attributes']['targetSdkVersion']);
         return null;
     }

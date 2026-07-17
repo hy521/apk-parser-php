@@ -23,13 +23,15 @@ class Archive extends \ZipArchive
     private $fileName;
 
     /**
-     * @param bool $file
+     * @param string|bool $file
      * @throws \Exception
      */
     public function __construct($file = false)
     {
         if ($file && is_file($file)) {
-            $this->open($file);
+            if (($result = $this->open($file)) !== true) {
+                throw new \Exception($file . " could not be opened as a zip archive (error code: " . $result . ")");
+            }
             $this->fileName = basename($this->filePath = $file);
         } else {
             throw new \Exception($file . " not a regular file");

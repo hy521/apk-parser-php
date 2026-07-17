@@ -199,15 +199,8 @@ class SeekableStream
      */
     private static function toMemoryStream($stream, $length = 0)
     {
-        $size = 0;
         $memoryStream = fopen('php://memory', 'wb+');
-        while (!feof($stream)) {
-            fputs($memoryStream, fread($stream, 1));
-            $size++;
-            if ($length > 0 && $size >= $length) {
-                break;
-            }
-        }
+        stream_copy_to_stream($stream, $memoryStream, $length > 0 ? $length : null);
         return $memoryStream;
     }
 }

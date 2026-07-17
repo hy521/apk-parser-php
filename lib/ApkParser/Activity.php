@@ -31,7 +31,7 @@ class Activity
     {
 
         $actArray = get_object_vars($actXml);
-        $attrs = $actArray['@attributes'];
+        $attrs = isset($actArray['@attributes']) ? $actArray['@attributes'] : array();
         $this->setName(isset($attrs['name']) ? $attrs['name'] : null);
         $this->setLabel(isset($attrs['label']) ? $attrs['label'] : null);
 
