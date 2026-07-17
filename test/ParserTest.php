@@ -95,6 +95,19 @@ class ParserTest extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * @throws \PHPUnit\Framework\ExpectationFailedException
+     * @throws \SebastianBergmann\RecursionContext\InvalidArgumentException
+     */
+    public function testClasses()
+    {
+        $classes = $this->subject->getClasses();
+
+        $this->assertContains('com.cks.EBHS.EBHSMainActivity', $classes);
+        $this->assertContains('com.cks.EBHS.R', $classes);
+        $this->assertCount(19, $classes);
+    }
+
+    /**
      * @throws \ApkParser\Exceptions\XmlParserException
      * @throws \PHPUnit\Framework\ExpectationFailedException
      * @throws \SebastianBergmann\RecursionContext\InvalidArgumentException

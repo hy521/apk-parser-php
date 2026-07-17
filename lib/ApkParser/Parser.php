@@ -82,45 +82,32 @@ class Parser
         return $this->apk->extractTo($destination, $entries);
     }
 
+    /**
+     * List the classes defined in the apk's dex files (multidex included)
+     * as dotted names, e.g. "com.example.app.MainActivity".
+     *
+     * @return array
+     * @throws Exceptions\ApkException
+     * @throws Exceptions\DexParserException
+     */
     public function getClasses()
     {
-        $dexStream = $this->apk->getClassesDexStream();
-        $apkName = $this->apk->getApkName();
+        $dexNames = $this->apk->getDexNames();
 
-        $cache_folder = $this->config->tmp_path . '/' . str_replace('.', '_', $apkName) . '/';
-
-        // No folder means no cached data.
-        if (!is_dir($cache_folder))
-            mkdir($cache_folder, 0755, true);
-
-        $dex_file = $cache_folder . '/classes.dex';
-        $dexStream->save($dex_file);
-
-        // run shell command to extract  dalvik compiled codes to the cache folder.
-        // Template : java -jar dedexer.jar -d {destination_folder} {source_dex_file}
-        $command = "java -jar " . escapeshellarg($this->config->jar_path)
-            . " -d " . escapeshellarg($cache_folder)
-            . " " . escapeshellarg($dex_file);
-        $returns = shell_exec($command);
-
-        $file_list = Utils::globRecursive($cache_folder . '*.ddx');
-
-        // dedexer always writes something to stdout, so instead of inspecting the
-        // output we verify that the decompiled class files were actually produced.
-        if (empty($file_list)) {
-            throw new \Exception("Couldn't decompile .dex file" . ($returns ? " : " . trim($returns) : ""));
+        if (empty($dexNames)) {
+            throw new Exceptions\ApkException("No dex file found in the apk");
         }
 
-        //Make classnames more readable.
-        foreach ($file_list as &$file) {
-            $file = str_replace($cache_folder, '', $file);
-            $file = str_replace('/', '.', $file);
-            $file = str_replace('.ddx', '', $file);
-            $file = trim($file, '.');
+        $classLists = array();
+        foreach ($dexNames as $dexName) {
+            $stream = $this->apk->getStream($dexName);
+            if (!is_resource($stream)) {
+                throw new Exceptions\ApkException("Could not read " . $dexName . " from the apk");
+            }
+            $dexParser = new DexParser($stream);
+            $classLists[] = $dexParser->getClassNames();
         }
 
-
-        return $file_list;
-
+        return array_values(array_unique(array_merge(...$classLists)));
     }
 }

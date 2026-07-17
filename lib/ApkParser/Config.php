@@ -13,7 +13,6 @@ namespace ApkParser;
  * Class Config
  * @package ApkParser
  * @property $tmp_path string
- * @property $jar_path string
  * @property $manifest_only boolean
  */
 class Config
@@ -28,9 +27,13 @@ class Config
      */
     public function __construct(array $config = array())
     {
+        if (array_key_exists('jar_path', $config)) {
+            // Dex parsing is built in now (see DexParser), a custom dedexer jar can no longer be used.
+            trigger_error('The jar_path config option is no longer supported and will be ignored.', E_USER_DEPRECATED);
+        }
+
         $this->config = array_merge(array(
             'tmp_path' => sys_get_temp_dir(),
-            'jar_path' => __DIR__ . '/Dex/dedexer.jar',
             'manifest_only' => false
         ), $config);
     }
@@ -41,7 +44,7 @@ class Config
      */
     public function get($key)
     {
-        return $this->config[$key];
+        return array_key_exists($key, $this->config) ? $this->config[$key] : null;
     }
 
     /**
@@ -50,7 +53,7 @@ class Config
      */
     public function __get($key)
     {
-        return $this->config[$key];
+        return $this->get($key);
     }
 
     /**

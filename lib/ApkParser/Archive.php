@@ -83,6 +83,24 @@ class Archive extends \ZipArchive
     }
 
     /**
+     * List every dex entry in the apk (classes.dex, classes2.dex, ... for multidex).
+     *
+     * @return array entry names
+     */
+    public function getDexNames()
+    {
+        $names = array();
+        for ($i = 0; $i < $this->numFiles; $i++) {
+            $name = $this->getNameIndex($i);
+            if (preg_match('/^classes\d*\.dex$/', $name)) {
+                $names[] = $name;
+            }
+        }
+        sort($names, SORT_NATURAL);
+        return $names;
+    }
+
+    /**
      * Apk file path.
      * @return string
      */

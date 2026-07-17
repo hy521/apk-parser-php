@@ -45,10 +45,17 @@ class XmlParser
     private $namespaces = array();
 
     /**
-     * Namespace uris already written out as xmlns declarations.
+     * Namespace uris currently in scope through an emitted xmlns declaration.
      * @var array
      */
     private $declaredNamespaces = array();
+
+    /**
+     * Per-open-element stack of the namespace uris each element declared,
+     * so declarations go out of scope when their element closes.
+     * @var array
+     */
+    private $nsDeclarationStack = array();
 
     public static $indent_spaces = "                                             ";
 
@@ -160,13 +167,17 @@ class XmlParser
                 case self::TAG_START:
                     {
                         $tagSix = $this->littleEndianWord($this->bytes, $off + 6 * 4);
-                        $numbAttrs = $this->littleEndianWord($this->bytes, $off + 7 * 4);
+                        // The word at attrExt offset 28 packs attributeCount in the low
+                        // 16 bits and idIndex in the high 16 bits (aapt2 sets idIndex
+                        // whenever the element has an android:id attribute).
+                        $numbAttrs = $this->littleEndianWord($this->bytes, $off + 7 * 4) & 0xFFFF;
                         $off += 9 * 4;
                         $tagName = $this->compXmlString($this->bytes, $sitOff, $stOff, $nameSi);
                         $startTagLineNo = $lineNo;
                         $attr_string = "";
                         $ns_string = "";
                         $attrNameArray = array();
+                        $nsDeclaredHere = array();
 
                         if ($indentCount == 0) {
                             // Declare every known namespace on the root element.
@@ -174,6 +185,7 @@ class XmlParser
                                 if (!isset($this->declaredNamespaces[$nsUri])) {
                                     $ns_string .= " xmlns:" . $nsPrefix . "=\"" . htmlspecialchars($nsUri, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "\"";
                                     $this->declaredNamespaces[$nsUri] = true;
+                                    $nsDeclaredHere[] = $nsUri;
                                 }
                             }
                         }
@@ -192,15 +204,18 @@ class XmlParser
                                 $attrName = $this->getResourceNameFromID($attrNameResID);
                             }
                             if (empty($attrName)) {
-                                // No usable attribute name, skip it or the xml would be invalid.
-                                continue;
+                                // No resource map to resolve the name against, keep the
+                                // attribute and its value under a placeholder name.
+                                $attrName = "UNRESOLVED_" . $attrNameSi;
                             }
 
                             if (($attrValueSi != -1)) {
                                 $attrValue = $this->compXmlString($this->bytes, $sitOff, $stOff, $attrValueSi);
                                 $attrValue = htmlspecialchars($attrValue, ENT_XML1 | ENT_QUOTES, 'UTF-8'); // https://stackoverflow.com/a/29924176
                             } else {
-                                $attrValue = "0x" . dechex($attrResId);
+                                // Mask to 32 bits: littleEndianWord() sign-extends, and dechex()
+                                // would render e.g. -1 as 16 f's on 64-bit php.
+                                $attrValue = "0x" . dechex($attrResId & 0xFFFFFFFF);
                             }
 
                             // Resolve the attribute namespace, so a duplicate local name can be
@@ -217,9 +232,10 @@ class XmlParser
                                 $attr_string .= " " . $attrName . "=\"" . $attrValue . "\"";
                             } elseif ($attrQualifiedName !== $attrName && !in_array($attrQualifiedName, $attrNameArray)) {
                                 if (!isset($this->declaredNamespaces[$attrNsUri])) {
-                                    // The root element didn't declare this namespace, declare it here.
+                                    // No in-scope declaration for this namespace, declare it here.
                                     $ns_string .= " xmlns:" . $this->namespaces[$attrNsUri] . "=\"" . htmlspecialchars($attrNsUri, ENT_XML1 | ENT_QUOTES, 'UTF-8') . "\"";
                                     $this->declaredNamespaces[$attrNsUri] = true;
+                                    $nsDeclaredHere[] = $attrNsUri;
                                 }
                                 $attrNameArray[] = $attrQualifiedName;
                                 $attr_string .= " " . $attrQualifiedName . "=\"" . $attrValue . "\"";
@@ -228,6 +244,7 @@ class XmlParser
                         }
 
                         $this->appendXmlIndent($indentCount, "<" . $tagName . $ns_string . $attr_string . ">");
+                        $this->nsDeclarationStack[] = $nsDeclaredHere;
                         $indentCount++;
                     }
                     break;
@@ -238,6 +255,14 @@ class XmlParser
                         $off += 6 * 4;
                         $tagName = $this->compXmlString($this->bytes, $sitOff, $stOff, $nameSi);
                         $this->appendXmlIndent($indentCount, "</" . $tagName . ">");
+
+                        // Namespaces declared on the closed element are out of scope now.
+                        $nsDeclaredHere = array_pop($this->nsDeclarationStack);
+                        if (!empty($nsDeclaredHere)) {
+                            foreach ($nsDeclaredHere as $nsUri) {
+                                unset($this->declaredNamespaces[$nsUri]);
+                            }
+                        }
                     }
                     break;
 

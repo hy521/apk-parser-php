@@ -1,70 +1,124 @@
-# [APK Parser](https://github.com/evozi/apk-parser-php)
-[![Latest Stable Version](https://poser.pugx.org/evozi/apk-parser-php/version.svg)](https://packagist.org/packages/evozi/apk-parser-php) [![Latest Unstable Version](https://poser.pugx.org/evozi/apk-parser-php/v/unstable.svg)](//packagist.org/packages/evozi/apk-parser-php) [![Total Downloads](https://poser.pugx.org/evozi/apk-parser-php/downloads.svg)](https://packagist.org/packages/evozi/apk-parser-php)
+# APK Parser
 
-This package can extract application package files in APK format used by devices running on Android OS.
-It can open an APK file and extract the contained manifest file to parse it and retrieve the meta-information
-it contains like the application name, description, device feature access permission it requires, etc..
-The class can also extract the whole files contained in the APK file to a given directory.
+[![CI](https://github.com/evozi/apk-parser-php/actions/workflows/ci.yml/badge.svg)](https://github.com/evozi/apk-parser-php/actions/workflows/ci.yml)
+[![Latest Stable Version](https://poser.pugx.org/evozi/apk-parser-php/version.svg)](https://packagist.org/packages/evozi/apk-parser-php)
+[![Total Downloads](https://poser.pugx.org/evozi/apk-parser-php/downloads.svg)](https://packagist.org/packages/evozi/apk-parser-php)
 
-### Requirements
+A pure-PHP library for reading Android application packages (`.apk` files). It parses the binary `AndroidManifest.xml` and resource table without any external tools, giving you access to the package name, version, SDK levels, permissions, activities, and more. It can also list every class defined in the app's dex files (multidex supported) using a native PHP dex parser — no Java required — and extract the APK's contents to a directory.
 
-PHP 8.1+
+## Requirements
 
-# Installation
+- PHP 8.1+ (tested on PHP 8.1 – 8.5)
+- Extensions: `zip`, `simplexml`, `libxml`, `json`, `mbstring`
 
-## Composer
-
-### Install Composer
+## Installation
 
 ```bash
-curl -sS https://getcomposer.org/installer | php
+composer require evozi/apk-parser-php
 ```
 
-### Install via composer by hand
+## Usage
 
-Create a composer.json into your project and add to your composer.json file by hand.
+### Reading basic information
 
-```javascript
-{
-    ...
-    "require": {
-        ...
-        "evozi/apk-parser-php":"dev-master"
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+$apk = new \ApkParser\Parser('MyApp.apk');
+$manifest = $apk->getManifest();
+
+echo $manifest->getPackageName();     // com.example.app
+echo $manifest->getVersionName();     // 1.2.3
+echo $manifest->getVersionCode();     // 10203
+echo $manifest->getMinSdkLevel();     // 21
+echo $manifest->getTargetSdkLevel();  // 34
+echo $manifest->getMinSdk()->platform;    // e.g. "5.0 Lollipop"
+var_dump($manifest->isDebuggable());  // false
+```
+
+### Permissions
+
+`getPermissions()` returns each permission with its description and cost/warning/danger flags:
+
+```php
+foreach ($manifest->getPermissions() as $permission => $detail) {
+    echo $permission . ': ' . $detail['description'] . PHP_EOL;
+
+    if ($detail['flags']['danger']) {
+        echo "  (dangerous permission)" . PHP_EOL;
     }
-    ...
 }
 ```
 
+### Activities and intent filters
 
-Once you have added this, just run:
-
-```bash
-php composer.phar update evozi/apk-parser-php
-```
-or
-
-```bash
-composer install
+```php
+foreach ($manifest->getApplication()->activities as $activity) {
+    echo $activity->name . ($activity->isLauncher ? ' (Launcher)' : '') . PHP_EOL;
+}
 ```
 
-### Install using composer
+### Listing classes from the dex files
 
-```bash
-php composer.phar require evozi/apk-parser-php:dev-master
+Classes are read directly from `classes.dex` (and any `classes2.dex`, `classes3.dex`, … for multidex apps) with the built-in PHP dex parser:
+
+```php
+foreach ($apk->getClasses() as $className) {
+    echo $className . PHP_EOL; // e.g. com.example.app.MainActivity
+}
 ```
 
+### Resources
 
-# Testing
+```php
+// Resolve resource references from the manifest, e.g. the app label and icon
+$label = $apk->getResources($manifest->getApplication()->getLabel());
+echo $label[0];
 
-Tests are powered by PHPUnit. Install dependencies (requires [Composer](https://getcomposer.org/download)),
-then run the test suite:
+$icons = $apk->getResources($manifest->getApplication()->getIcon());
+foreach ($icons as $icon) {
+    file_put_contents(basename($icon), stream_get_contents($apk->getStream($icon)));
+}
+```
+
+### Extracting the APK contents
+
+```php
+$apk->extractTo('/path/to/output');            // everything
+$apk->extractTo('/path/to/output', $entries);  // or only specific entries
+```
+
+### Raw manifest XML
+
+```php
+echo $manifest->getXmlString(); // decoded, human-readable AndroidManifest.xml
+```
+
+### Configuration
+
+If you only need the manifest, skip parsing the resource table for a faster start-up:
+
+```php
+$apk = new \ApkParser\Parser('MyApp.apk', ['manifest_only' => true]);
+```
+
+More runnable examples are available in the [`examples/`](./examples) directory.
+
+## Testing
+
+Tests are powered by PHPUnit and run on every push via GitHub Actions:
 
 ```bash
 composer install
 composer test
 ```
 
+## Credits
 
-# License
+Originally based on [tufanbarisyildirim/php-apk-parser](https://github.com/tufanbarisyildirim/php-apk-parser) by Tufan Baris Yildirim, maintained by [Evozi](https://www.evozi.com).
+
+## License
 
 APK Parser is [MIT licensed](./LICENSE.md).

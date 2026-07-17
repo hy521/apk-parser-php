@@ -392,27 +392,33 @@ class ResourcesParser
         $bytes->backSeek(-4);
         $config['input'] = $bytes->readInt32LE();
 
-        if ($size >= 36) {
-            // 8
+        // screenSize and version (offsets 20-27) already exist in the 28-byte
+        // configs written by older aapt versions.
+        if ($size >= 28) {
+            // 4
             $config['screenWidth'] = $bytes->readInt16LE();
             $config['screenHeight'] = $bytes->readInt16LE();
             $bytes->backSeek(-4);
             $config['screenSize'] = $bytes->readInt32LE();
 
-            // 8
+            // 4
             $config['sdVersion'] = $bytes->readInt16LE();
             $config['minorVersion'] = $bytes->readInt16LE();
             $bytes->backSeek(-4);
             $config['version'] = $bytes->readInt32LE();
+        }
 
-            // 8
+        if ($size >= 32) {
+            // 4
             $config['screenLayout'] = $bytes->readByte();
             $config['uiMode'] = $bytes->readByte();
             $config['smallestScreenWidthDp'] = $bytes->readInt16LE();
             $bytes->backSeek(-4);
             $config['screenConfig'] = $bytes->readInt32LE();
+        }
 
-            // 8
+        if ($size >= 36) {
+            // 4
             $config['screenWidthDp'] = $bytes->readInt16LE();
             $config['screenHeightDp'] = $bytes->readInt16LE();
             $bytes->backSeek(-4);
