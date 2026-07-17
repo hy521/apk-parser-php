@@ -8,7 +8,7 @@ The class can also extract the whole files contained in the APK file to a given 
 
 ### Requirements
 
-PHP 7.1+
+PHP 8.1+
 
 # Installation
 
@@ -56,12 +56,13 @@ php composer.phar require evozi/apk-parser-php:dev-master
 
 # Testing
 
-Tests are powered by PHPUnit. You have several options.
+Tests are powered by PHPUnit. Install dependencies (requires [Composer](https://getcomposer.org/download)),
+then run the test suite:
 
-- Run `phpunit` if PHPUnit is installed globally.
-- Install dependencies (requires [Composer](https://getcomposer.org/download)).
-  Run `php composer.phar --dev install` or `composer --dev install`. Then `bin/vendor/phpunit` to run version
-  installed by Composer. This ensures that you are running a version compatible with the test suite.
+```bash
+composer install
+composer test
+```
 
 
 # License

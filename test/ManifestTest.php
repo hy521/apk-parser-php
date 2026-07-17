@@ -10,22 +10,18 @@
  */
 class ManifestTest extends \PHPUnit\Framework\TestCase
 {
-
     /**
      * @throws \ApkParser\Exceptions\XmlParserException
-     * @throws \PHPUnit\Framework\ExpectationFailedException
-     * @throws \PHPUnit\Framework\MockObject\RuntimeException
-     * @throws \SebastianBergmann\RecursionContext\InvalidArgumentException
      */
     public function testMetaData()
     {
-        $mock = $this->getMockBuilder('ApkParser\XmlParser')
+        $mock = $this->getMockBuilder(\ApkParser\XmlParser::class)
             ->disableOriginalConstructor()
-            ->setMethods(array('getXmlString'))
+            ->onlyMethods(array('getXmlString'))
             ->getMock();
 
         $file = __DIR__ . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'meta.xml';
-        $mock->expects($this->once())->method('getXmlString')->will($this->returnValue(file_get_contents($file)));
+        $mock->expects($this->once())->method('getXmlString')->willReturn(file_get_contents($file));
 
         $manifest = new \ApkParser\Manifest($mock);
 

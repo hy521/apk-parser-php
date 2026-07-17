@@ -20,7 +20,7 @@ class ParserTest extends \PHPUnit\Framework\TestCase
     /**
      * @throws Exception
      */
-    public function setUp()
+    protected function setUp(): void
     {
         $file = __DIR__ . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'EBHS.apk';
         $this->subject = new Parser($file);

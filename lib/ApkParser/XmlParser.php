@@ -93,7 +93,7 @@ class XmlParser
             }           // not a chunk
 
             switch ($chunkType){
-                case self::RES_STRING_POOL_TYPE;
+                case self::RES_STRING_POOL_TYPE:
                     $numbStrings = $this->littleEndianWord($this->bytes, $off + 8);
                     $flags = $this->littleEndianWord($this->bytes, $off + 8 * 2);
                     $this->isUTF8 = ($flags & self::UTF8_FLAG) != 0;
