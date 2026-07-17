@@ -57,6 +57,17 @@ class Manifest extends Xml
     }
 
     /**
+     * Get Application Permissions as the raw android permission names,
+     * e.g. "android.permission.INTERNET".
+     * @return array
+     * @throws Exceptions\XmlParserException
+     */
+    public function getPermissionsRaw()
+    {
+        return $this->getXmlObject()->getPermissionsRaw();
+    }
+
+    /**
      * Android Package Name
      * @return string
      * @throws \Exception
@@ -88,11 +99,59 @@ class Manifest extends Xml
 
     /**
      * @return bool
-     * @throws \Exception
+     * @throws Exceptions\XmlParserException
      */
     public function isDebuggable()
     {
-        return (bool)$this->getAttribute('debuggable');
+        // android:debuggable lives on the <application> element.
+        $debuggable = $this->getApplication()->getAttr('debuggable');
+
+        // Keep compatibility for manifests where debuggable is exposed on root attrs.
+        if ($debuggable === null && $this->attrs !== null && array_key_exists('debuggable', $this->attrs)) {
+            $debuggable = $this->attrs['debuggable'];
+        }
+
+        if ($debuggable === null) {
+            return false;
+        }
+
+        return $this->parseBooleanValue($debuggable);
+    }
+
+    /**
+     * Parse Android boolean-ish attribute values ("true", "0xffffffff", "1") safely.
+     *
+     * @param mixed $value
+     * @return bool
+     */
+    private function parseBooleanValue($value)
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return ((int)$value) !== 0;
+        }
+
+        if (is_string($value)) {
+            $value = trim($value);
+            if ($value === '') {
+                return false;
+            }
+            if (preg_match('/^0x[0-9a-f]+$/i', $value) === 1) {
+                return hexdec($value) !== 0;
+            }
+            if (is_numeric($value)) {
+                return ((float)$value) !== 0.0;
+            }
+
+            $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($bool !== null) {
+                return $bool;
+            }
+        }
+
+        return (bool)$value;
     }
 
     /**

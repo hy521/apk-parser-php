@@ -65,6 +65,17 @@ class Parser
         return is_null($this->resources) ? FALSE : $this->resources->getResources($key);
     }
 
+    /**
+     * Get all resources as an array, indexed by hex resource id.
+     * Empty when the parser runs with manifest_only enabled.
+     *
+     * @return array
+     */
+    public function getAllResources()
+    {
+        return is_null($this->resources) ? array() : $this->resources->getAllResources();
+    }
+
     public function getStream($name)
     {
         return $this->apk->getStream($name);

@@ -50,6 +50,11 @@ foreach ($manifest->getPermissions() as $permission => $detail) {
         echo "  (dangerous permission)" . PHP_EOL;
     }
 }
+
+// Or just the raw android permission names:
+foreach ($manifest->getPermissionsRaw() as $permission) {
+    echo $permission . PHP_EOL; // e.g. android.permission.INTERNET
+}
 ```
 
 ### Activities and intent filters
@@ -81,6 +86,13 @@ $icons = $apk->getResources($manifest->getApplication()->getIcon());
 foreach ($icons as $icon) {
     file_put_contents(basename($icon), stream_get_contents($apk->getStream($icon)));
 }
+
+// Resources can also be looked up by symbolic name instead of hex id —
+// "string/app_name" and "@string/app_name" both work:
+$appName = $apk->getResources('@string/app_name');
+
+// Or fetch the entire resource table at once, indexed by hex resource id:
+$all = $apk->getAllResources();
 ```
 
 ### Extracting the APK contents
@@ -113,6 +125,14 @@ Tests are powered by PHPUnit and run on every push via GitHub Actions:
 ```bash
 composer install
 composer test
+```
+
+Or run everything inside Docker without a local PHP installation:
+
+```bash
+make docker-build    # build the PHP image
+make docker-install  # composer install inside the container
+make docker-check    # php -l + the full test suite
 ```
 
 ## Credits

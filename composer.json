@@ -45,6 +45,7 @@
     }
   },
   "scripts": {
-    "test": "phpunit"
+    "test": "phpunit",
+    "lint:php": "find lib test -name '*.php' -print0 | xargs -0 -n1 php -l"
   }
 }

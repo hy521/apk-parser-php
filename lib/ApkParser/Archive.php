@@ -2,6 +2,9 @@
 
 namespace ApkParser;
 
+use ApkParser\Exceptions\ApkException;
+use ApkParser\Exceptions\FileNotFoundException;
+
 /**
  * This file is part of the Apk Parser package.
  *
@@ -24,18 +27,64 @@ class Archive extends \ZipArchive
 
     /**
      * @param string|bool $file
-     * @throws \Exception
+     * @throws ApkException
+     * @throws FileNotFoundException
      */
     public function __construct($file = false)
     {
-        if ($file && is_file($file)) {
-            if (($result = $this->open($file)) !== true) {
-                throw new \Exception($file . " could not be opened as a zip archive (error code: " . $result . ")");
-            }
-            $this->fileName = basename($this->filePath = $file);
-        } else {
-            throw new \Exception($file . " not a regular file");
+        if (!$file || !is_file($file)) {
+            throw new FileNotFoundException($file . " not a regular file");
         }
+
+        $result = $this->open($file);
+        if ($result !== true) {
+            throw new ApkException(
+                sprintf(
+                    'Unable to open APK archive "%s": %s',
+                    $file,
+                    self::getOpenErrorMessage((int)$result)
+                )
+            );
+        }
+
+        $this->fileName = basename($this->filePath = $file);
+    }
+
+    /**
+     * @param int $errorCode
+     * @return string
+     */
+    private static function getOpenErrorMessage($errorCode)
+    {
+        $messages = array(
+            self::ER_MULTIDISK => 'Multi-disk zip archives are not supported.',
+            self::ER_RENAME => 'Failed to rename temporary file.',
+            self::ER_CLOSE => 'Failed to close zip archive.',
+            self::ER_SEEK => 'Seek error.',
+            self::ER_READ => 'Read error.',
+            self::ER_WRITE => 'Write error.',
+            self::ER_CRC => 'CRC error.',
+            self::ER_ZIPCLOSED => 'Containing zip archive was closed.',
+            self::ER_NOENT => 'No such file.',
+            self::ER_EXISTS => 'File already exists.',
+            self::ER_OPEN => 'Cannot open file.',
+            self::ER_TMPOPEN => 'Failure to create temporary file.',
+            self::ER_ZLIB => 'Zlib error.',
+            self::ER_MEMORY => 'Memory allocation failure.',
+            self::ER_CHANGED => 'Entry has been changed.',
+            self::ER_COMPNOTSUPP => 'Compression method not supported.',
+            self::ER_EOF => 'Premature EOF.',
+            self::ER_INVAL => 'Invalid argument.',
+            self::ER_NOZIP => 'Not a zip archive.',
+            self::ER_INTERNAL => 'Internal error.',
+            self::ER_INCONS => 'Zip archive inconsistent.',
+            self::ER_REMOVE => 'Cannot remove file.',
+            self::ER_DELETED => 'Entry has been deleted.',
+        );
+
+        return array_key_exists($errorCode, $messages)
+            ? $messages[$errorCode]
+            : 'Unknown error code ' . $errorCode;
     }
 
     /**

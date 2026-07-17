@@ -21,11 +21,7 @@ class ManifestXmlElement extends \SimpleXMLElement
          * @var \ApkParser\ManifestXmlElement
          */
         $permsArray = $this->{'uses-permission'};
-        $langFile = __DIR__ . "/lang/" . basename($lang) . ".permissions.json";
-        if (!is_file($langFile)) {
-            $langFile = __DIR__ . "/lang/en.permissions.json"; // fall back to english for unknown languages
-        }
-        $permissions = json_decode(file_get_contents($langFile), true) ?: array();
+        $permissions = $this->loadPermissionMap($lang);
         $perms = array();
         foreach ($permsArray as $perm) {
             $permAttr = get_object_vars($perm);
@@ -42,6 +38,38 @@ class ManifestXmlElement extends \SimpleXMLElement
             );
         }
         return $perms;
+    }
+
+    /**
+     * Load the permission description map for a language,
+     * falling back to english for unknown or unreadable languages.
+     *
+     * @param string $lang
+     * @return array
+     */
+    private function loadPermissionMap($lang)
+    {
+        $lang = basename((string)$lang);
+        $paths = array(__DIR__ . "/lang/{$lang}.permissions.json");
+        if ($lang !== 'en') {
+            $paths[] = __DIR__ . "/lang/en.permissions.json";
+        }
+
+        foreach ($paths as $path) {
+            if (!is_file($path) || !is_readable($path)) {
+                continue;
+            }
+            $json = file_get_contents($path);
+            if ($json === false) {
+                continue;
+            }
+            $permissions = json_decode($json, true);
+            if (is_array($permissions)) {
+                return $permissions;
+            }
+        }
+
+        return array();
     }
 
     /**

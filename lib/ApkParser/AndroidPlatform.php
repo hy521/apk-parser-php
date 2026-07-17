@@ -38,10 +38,20 @@ define('ANDROID_API_LOLLIPOP_MR1', 22);
 define('ANDROID_API_M', 23);
 define('ANDROID_API_N', 24);
 define('ANDROID_API_N_MR1', 25);
+// Upstream aliases for the Nougat api levels.
+define('ANDROID_API_NOUGAT', 24);
+define('ANDROID_API_NOUGAT_MR1', 25);
 define('ANDROID_API_OREO', 26);
 define('ANDROID_API_OREO_MR1', 27);
 define('ANDROID_API_PIE', 28);
 define('ANDROID_API_Q', 29);
+define('ANDROID_API_R', 30);
+define('ANDROID_API_S', 31);
+define('ANDROID_API_S_V2', 32);
+define('ANDROID_API_TIRAMISU', 33);
+define('ANDROID_API_UPSIDE_DOWN_CAKE', 34);
+define('ANDROID_API_VANILLA_ICE_CREAM', 35);
+define('ANDROID_API_BAKLAVA', 36);
 
 /**
  *
@@ -86,7 +96,14 @@ class AndroidPlatform
         ANDROID_API_OREO => array('versions' => array('8.0'), 'url' => 'https://developer.android.com/about/versions/oreo/android-8.0'),
         ANDROID_API_OREO_MR1 => array('versions' => array('8.1'), 'url' => 'https://developer.android.com/about/versions/oreo/android-8.1'),
         ANDROID_API_PIE => array('versions' => array('9.0'), 'url' => 'https://developer.android.com/about/versions/pie/android-9.0'),
-        ANDROID_API_Q => array('versions' => array('10.0'), 'url' => 'https://developer.android.com/about/versions/10/features')
+        ANDROID_API_Q => array('versions' => array('10.0'), 'url' => 'https://developer.android.com/about/versions/10/features'),
+        ANDROID_API_R => array('versions' => array('11.0'), 'url' => 'https://developer.android.com/about/versions/11/features'),
+        ANDROID_API_S => array('versions' => array('12.0'), 'url' => 'https://developer.android.com/about/versions/12/features'),
+        ANDROID_API_S_V2 => array('versions' => array('12L'), 'url' => 'https://developer.android.com/about/versions/12/12L/summary'),
+        ANDROID_API_TIRAMISU => array('versions' => array('13.0'), 'url' => 'https://developer.android.com/about/versions/13/summary'),
+        ANDROID_API_UPSIDE_DOWN_CAKE => array('versions' => array('14.0'), 'url' => 'https://developer.android.com/about/versions/14/summary'),
+        ANDROID_API_VANILLA_ICE_CREAM => array('versions' => array('15.0'), 'url' => 'https://developer.android.com/about/versions/15/summary'),
+        ANDROID_API_BAKLAVA => array('versions' => array('16.0'), 'url' => 'https://developer.android.com/about/versions/16/summary')
     );
 
     public $level = null;
@@ -104,6 +121,24 @@ class AndroidPlatform
         }
 
         $this->setLevel($apiLevel);
+    }
+
+    /**
+     * Find a platform by one of its version strings, e.g. "7.1" or "13.0".
+     *
+     * @param string $v
+     * @return AndroidPlatform|null
+     * @throws \Exception
+     */
+    public static function fromVersion($v)
+    {
+        foreach (self::$platforms as $apiLevel => $p) {
+            if (in_array($v, $p['versions'])) {
+                return new self($apiLevel);
+            }
+        }
+
+        return null;
     }
 
     public function __get($var)
