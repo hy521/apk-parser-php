@@ -52,6 +52,7 @@ define('ANDROID_API_TIRAMISU', 33);
 define('ANDROID_API_UPSIDE_DOWN_CAKE', 34);
 define('ANDROID_API_VANILLA_ICE_CREAM', 35);
 define('ANDROID_API_BAKLAVA', 36);
+define('ANDROID_API_CINNAMON_BUN', 37);
 
 /**
  *
@@ -103,7 +104,8 @@ class AndroidPlatform
         ANDROID_API_TIRAMISU => array('versions' => array('13.0'), 'url' => 'https://developer.android.com/about/versions/13/summary'),
         ANDROID_API_UPSIDE_DOWN_CAKE => array('versions' => array('14.0'), 'url' => 'https://developer.android.com/about/versions/14/summary'),
         ANDROID_API_VANILLA_ICE_CREAM => array('versions' => array('15.0'), 'url' => 'https://developer.android.com/about/versions/15/summary'),
-        ANDROID_API_BAKLAVA => array('versions' => array('16.0'), 'url' => 'https://developer.android.com/about/versions/16/summary')
+        ANDROID_API_BAKLAVA => array('versions' => array('16.0'), 'url' => 'https://developer.android.com/about/versions/16/summary'),
+        ANDROID_API_CINNAMON_BUN => array('versions' => array('17.0'), 'url' => 'https://developer.android.com/about/versions/17/summary')
     );
 
     public $level = null;
